@@ -26,9 +26,10 @@ def kontrol_et():
                 if old and new and old > 0 and new < old:
                     drop_ratio = (old - new) / old
                     if drop_ratio >= DROP_THRESHOLD:
-                        msg = f"""🎯 Oran Düşüşü!
-🏷️ Market: {market} ({label})
-📊 {old} ➡ {new} (%{int(drop_ratio*100)})"
+                        msg = f"""📉 Oran Düşüşü!
+Market: {market} ({label})
+{old} → {new} (%{int(drop_ratio*100)})
+"""
                         send_telegram_message(msg)
 
 if __name__ == "__main__":
