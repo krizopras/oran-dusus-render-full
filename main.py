@@ -17,7 +17,7 @@ logging.basicConfig(
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-DROP_THRESHOLD = float(os.getenv("DROP_THRESHOLD", "0.10"))
+DROP_THRESHOLD = float(os.getenv("DROP_THRESHOLD", "0.20"))
 
 @app.get("/")
 def root():
@@ -40,14 +40,15 @@ def process_odds_changes(odds_data):
             new_odds = match.get('new_odds')
             match_name = match.get('match', 'Bilinmeyen Maç')
             market_name = match.get('market_name', 'Bilinmeyen Market')
+            label = match.get('label', 'Seçim')
 
             if old_odds and new_odds and old_odds > 0 and new_odds < old_odds:
                 drop_ratio = (old_odds - new_odds) / old_odds
                 if drop_ratio >= DROP_THRESHOLD:
                     msg = f"""📉 Futbol Oran Düşüşü!
 ⚽ Maç: {match_name}
-🏆 Market: {market_name}
-📊 {old_odds} ➡ {new_odds} 
+🏷️ Bahis: {label} ({market_name})
+📊 {old_odds} ➡ {new_odds}
 📉 Düşüş: %{int(drop_ratio*100)}"""
                     send_telegram_message(msg)
         except Exception as e:
@@ -65,11 +66,12 @@ def background_worker():
             logging.error(f"Background worker hatası: {e}")
             time.sleep(300)
 
-# Uygulama başlarken thread başlat
+# Thread başlat
 threading.Thread(target=background_worker, daemon=True).start()
 
-# Web servisi başlat (Render için)
+# Web sunucu başlat
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
