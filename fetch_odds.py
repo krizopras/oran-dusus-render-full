@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import requests
 import functools
 
@@ -29,6 +30,10 @@ ODDS_FORMAT = "decimal"
 
 @cached(expire_after=300)
 def get_all_odds():
+    if not API_KEY:
+        logging.error("❌ ODDS_API_KEY eksik!")
+        return {}
+    
     try:
         url = "https://api.the-odds-api.com/v4/sports/?all=true"
         headers = {"Accept": "application/json"}
@@ -58,13 +63,13 @@ def get_all_odds():
                     all_data[league] = parse_odds_data(res.json())
             
             except requests.RequestException as e:
-                print(f"League {league} odds fetch hatası: {e}")
+                logging.error(f"League {league} odds fetch hatası: {e}")
                 continue
         
         return all_data
     
     except requests.RequestException as e:
-        print(f"Ana API çağrısında hata: {e}")
+        logging.error(f"Ana API çağrısında hata: {e}")
         return {}
 
 def parse_odds_data(matches):
