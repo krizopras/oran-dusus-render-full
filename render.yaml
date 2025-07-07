@@ -1,18 +1,18 @@
 services:
   - type: web
-    name: odds-tracker  # Benzersiz isim
-    env: python3.9      # Kesin Python sürümü
-    plan: free          # Ücretsiz plan
+    name: odds-tracker
+    env: python3.9
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
+      - key: SPORTMONKS_API_TOKEN
+        sync: false  # Güvenli token yönetimi
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
-      - key: ODDS_API_KEY
-        sync: false
       - key: DROP_THRESHOLD
         value: "0.10"
-    healthCheckPath: /  # Sağlık kontrolü
-    autoDeploy: true    # Otomatik deployment
+    healthCheckPath: /
+    autoDeploy: true
