@@ -1,82 +1,76 @@
-import os
+
 import requests
+import os
 import logging
-from datetime import datetime
 
-# Logging ayarları
-logging.basicConfig(level=logging.INFO)
+API_KEY = os.getenv("ODDS_API_KEY")
+REGIONS = "eu,uk"
+MARKETS = "h2h,totals,spreads"
+ODDS_FORMAT = "decimal"
 
-THE_ODDS_API_KEY = os.environ.get("THE_ODDS_API_KEY")
-BASE_URL = "https://api.the-odds-api.com/v4/sports/"
+EUROPEAN_LEAGUES = [
+    "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_euro_qualification",
+    "soccer_uefa_nations_league", "soccer_uefa_conference_league", "soccer_europe_euro",
+    "soccer_england_premier_league", "soccer_england_championship", "soccer_germany_bundesliga",
+    "soccer_germany_bundesliga2", "soccer_spain_la_liga", "soccer_spain_segunda_division",
+    "soccer_italy_serie_a", "soccer_italy_serie_b", "soccer_france_ligue_one",
+    "soccer_france_ligue_two", "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga",
+    "soccer_turkey_super_league", "soccer_sweden_allsvenskan", "soccer_norway_eliteserien",
+    "soccer_denmark_superliga", "soccer_finland_veikkausliiga", "soccer_belgium_first_div",
+    "soccer_switzerland_superleague", "soccer_austria_bundesliga", "soccer_czech_republic_first_league",
+    "soccer_poland_ekstraklasa", "soccer_slovakia_superliga", "soccer_slovenia_prva_liga",
+    "soccer_hungary_nb_i", "soccer_romania_liga_i", "soccer_croatia_1hnl",
+    "soccer_serbia_super_liga", "soccer_bulgaria_first_league", "soccer_russia_premier_league",
+    "soccer_ukraine_premier_league", "soccer_estonia_meistriliiga", "soccer_latvia_virsliga",
+    "soccer_lithuania_a_lyga", "soccer_belarus_vysshaya_liga", "soccer_bosnia_premier_league",
+    "soccer_montenegro_first_league", "soccer_macedonia_first_league", "soccer_albania_superliga",
+    "soccer_georgia_eka_liga", "soccer_kazakhstan_premier_league", "soccer_azerbaijan_premier_league",
+    "soccer_armenia_premier_league"
+]
+
+previous_odds = {}
 
 def get_football_odds():
-    if not THE_ODDS_API_KEY:
-        logging.error("❌ The Odds API Key eksik!")
-        return []
-    
-    # Futbol ligi endpoint'leri
-    football_leagues = [
-        "soccer_uefa_champs_league",
-        "soccer_epl",
-        "soccer_uefa_europa_league",
-        "soccer_spain_la_liga"
-    ]
-    
-    all_parsed_odds = []
-    
-    for league in football_leagues:
-        try:
-            url = f"{BASE_URL}{league}/odds"
-            
-            params = {
-                "apiKey": THE_ODDS_API_KEY,
-                "regions": "eu",  # Avrupa bölgesi
-                "markets": "h2h,spreads,totals",
-                "oddsFormat": "decimal"
-            }
-            
-            response = requests.get(url, params=params, timeout=10)
-            
-            # Detaylı hata yakalama
-            if response.status_code != 200:
-                logging.error(f"{league} için API Çağrı Hatası: {response.status_code}")
-                continue
-            
-            # Her bir lig için odds'ları parse et
-            league_odds = parse_football_odds(response.json(), league)
-            all_parsed_odds.extend(league_odds)
-        
-        except requests.RequestException as e:
-            logging.error(f"{league} için API çağrısı hatası: {e}")
-    
-    return all_parsed_odds
+    result = []
 
-def parse_football_odds(raw_data, league):
-    parsed_odds = []
-    
-    try:
-        for match in raw_data:
-            home_team = match.get('home_team', 'Bilinmeyen Takım')
-            away_team = match.get('away_team', 'Bilinmeyen Takım')
-            
-            # Bookmaker'lar üzerinden odds'ları çekme
-            for bookmaker in match.get('bookmakers', []):
-                markets = bookmaker.get('markets', [])
-                
-                for market in markets:
-                    market_name = market.get('key', 'Bilinmeyen Market')
-                    
-                    # Her bir sonuç için
-                    for outcome in market.get('outcomes', []):
-                        parsed_odds.append({
-                            'match': f"{home_team} vs {away_team}",
-                            'league': league,
-                            'market_name': market_name,
-                            'old_odds': outcome.get('price', 0) + 0.2,  # Simüle edilmiş eski oran
-                            'new_odds': outcome.get('price', 0)
-                        })
-    
-    except Exception as e:
-        logging.error(f"{league} için veri işleme hatası: {e}")
-    
-    return parsed_odds
+    for sport_key in EUROPEAN_LEAGUES:
+        try:
+            url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
+            params = {
+                "apiKey": API_KEY,
+                "regions": REGIONS,
+                "markets": MARKETS,
+                "oddsFormat": ODDS_FORMAT
+            }
+
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            matches = response.json()
+
+            for match in matches:
+                match_name = f"{match['home_team']} vs {match['away_team']}"
+                for bookmaker in match.get("bookmakers", []):
+                    for market in bookmaker.get("markets", []):
+                        for outcome in market.get("outcomes", []):
+                            key = f"{match['id']}_{market['key']}_{outcome['name']}"
+                            new_price = outcome.get("price")
+
+                            if new_price is None:
+                                continue
+
+                            old_price = previous_odds.get(key)
+                            previous_odds[key] = new_price
+
+                            if old_price and new_price < old_price:
+                                result.append({
+                                    "match": match_name,
+                                    "market_name": market["key"],
+                                    "label": outcome["name"],
+                                    "old_odds": old_price,
+                                    "new_odds": new_price
+                                })
+
+        except Exception as e:
+            logging.error(f"API ERROR ({sport_key}): {e}")
+
+    return result
