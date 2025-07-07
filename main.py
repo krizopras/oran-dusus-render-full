@@ -3,7 +3,7 @@ import time
 import logging
 import requests
 import threading
-from fetch_odds import get_odds_data
+from fetch_odds import get_football_odds
 
 # Logging yapılandırması
 logging.basicConfig(
@@ -30,13 +30,15 @@ def process_odds_changes(odds_data):
         try:
             old_odds = match.get('old_odds')
             new_odds = match.get('new_odds')
+            match_name = match.get('match', 'Bilinmeyen Maç')
             market_name = match.get('market_name', 'Bilinmeyen Market')
             
             if old_odds and new_odds and old_odds > 0 and new_odds < old_odds:
                 drop_ratio = (old_odds - new_odds) / old_odds
                 
                 if drop_ratio >= DROP_THRESHOLD:
-                    msg = f"""📉 Oran Düşüşü!
+                    msg = f"""📉 Futbol Oran Düşüşü!
+⚽ Maç: {match_name}
 🏆 Market: {market_name}
 📊 {old_odds} ➡ {new_odds} 
 📉 Düşüş: %{int(drop_ratio*100)}"""
@@ -48,8 +50,8 @@ def process_odds_changes(odds_data):
 def background_worker():
     while True:
         try:
-            logging.info("⏳ Oranlar kontrol ediliyor...")
-            odds_data = get_odds_data()
+            logging.info("⏳ Futbol oranları kontrol ediliyor...")
+            odds_data = get_football_odds()
             
             if odds_data:
                 process_odds_changes(odds_data)
@@ -76,5 +78,5 @@ def main():
         logging.info("Uygulama kapatılıyor...")
 
 if __name__ == "__main__":
-    logging.info("🚀 Odds Takip Botu Başlatıldı!")
+    logging.info("🚀 Futbol Odds Takip Botu Başlatıldı!")
     main()
