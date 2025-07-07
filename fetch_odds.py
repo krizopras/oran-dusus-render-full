@@ -1,9 +1,9 @@
 import os
+import time
 import requests
 import functools
-import time
 
-def cached(expire_after=300):  # 5 dakika cache
+def cached(expire_after=300):
     def decorator(func):
         cache = {}
         @functools.wraps(func)
