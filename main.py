@@ -3,7 +3,7 @@ import time
 import logging
 import requests
 import threading
-from fetch_odds import get_all_odds
+from fetch_odds import get_sportmonks_odds
 
 # Logging yapılandırması
 logging.basicConfig(
@@ -13,6 +13,7 @@ logging.basicConfig(
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+SPORTMONKS_API_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN")
 DROP_THRESHOLD = float(os.getenv("DROP_THRESHOLD", "0.10"))
 
 def send_telegram_message(message):
@@ -21,43 +22,38 @@ def send_telegram_message(message):
     try:
         response = requests.post(url, data=data, timeout=10)
         response.raise_for_status()
-        logging.info(f"Telegram bildirimi gönderildi: {message[:50]}...")
+        logging.info(f"Telegram bildirimi: {message[:50]}...")
     except Exception as e:
         logging.error(f"Telegram mesaj hatası: {e}")
 
-def ping_self():
-    try:
-        render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://example.com")
-        while True:
-            try:
-                requests.get(render_url, timeout=10)
-                logging.info("🌐 Self ping başarılı")
-            except Exception as e:
-                logging.error(f"Ping hatası: {e}")
-            time.sleep(300)  # 5 dakikada bir ping
-    except Exception as e:
-        logging.error(f"Ping mekanizması hatası: {e}")
+def process_odds_changes(odds_data):
+    for match in odds_data:
+        try:
+            market_name = match.get('market_name', 'Bilinmeyen Market')
+            old_odds = match.get('old_odds')
+            new_odds = match.get('new_odds')
+            
+            if old_odds and new_odds and old_odds > 0 and new_odds < old_odds:
+                drop_ratio = (old_odds - new_odds) / old_odds
+                
+                if drop_ratio >= DROP_THRESHOLD:
+                    msg = f"""📉 Oran Düşüşü!
+🏆 Market: {market_name}
+📊 {old_odds} ➡ {new_odds} 
+📉 Düşüş: %{int(drop_ratio*100)}"""
+                    
+                    send_telegram_message(msg)
+        except Exception as e:
+            logging.error(f"Odds işleme hatası: {e}")
 
 def background_worker():
     while True:
         try:
             logging.info("⏳ Oranlar kontrol ediliyor...")
-            odds_data = get_all_odds()
+            odds_data = get_sportmonks_odds()
             
-            for match_id, markets in odds_data.items():
-                for market, entries in markets.items():
-                    for entry in entries:
-                        old = entry.get("old")
-                        new = entry.get("new")
-                        label = entry.get("label")
-                        
-                        if old and new and old > 0 and new < old:
-                            drop_ratio = (old - new) / old
-                            if drop_ratio >= DROP_THRESHOLD:
-                                msg = f"""📉 Oran Düşüşü!
-🏷️ Market: {market} ({label})
-📊 {old} ➡ {new} (Düşüş: %{int(drop_ratio*100)})"""
-                                send_telegram_message(msg)
+            if odds_data:
+                process_odds_changes(odds_data)
             
             time.sleep(900)  # 15 dakikada bir kontrol
         
@@ -66,15 +62,11 @@ def background_worker():
             time.sleep(300)  # Hata durumunda 5 dk bekle
 
 def main():
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logging.error("❌ Telegram credentials eksik!")
+    # Gerekli credential kontrolü
+    if not all([TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SPORTMONKS_API_TOKEN]):
+        logging.error("❌ Eksik credentials!")
         return
     
-    # Ping thread'i
-    ping_thread = threading.Thread(target=ping_self, daemon=True)
-    ping_thread.start()
-    
-    # Background worker thread'i
     worker_thread = threading.Thread(target=background_worker, daemon=True)
     worker_thread.start()
     
@@ -85,5 +77,5 @@ def main():
         logging.info("Uygulama kapatılıyor...")
 
 if __name__ == "__main__":
-    logging.info("🚀 Bot başlatıldı!")
+    logging.info("🚀 Odds Takip Botu Başlatıldı!")
     main()
