@@ -78,5 +78,8 @@ def main():
         logging.info("Uygulama kapatılıyor...")
 
 if __name__ == "__main__":
-    logging.info("🚀 Futbol Odds Takip Botu Başlatıldı!")
-    main()
+    import os
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 10000))  # Render otomatik olarak PORT değişkenini verir
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
