@@ -1,33 +1,71 @@
+import os
 import requests
+import functools
+import time
 
-API_KEY = "8669c873a0ad07e5e2f38c6f52fb8e69"
+def cached(expire_after=300):  # 5 dakika cache
+    def decorator(func):
+        cache = {}
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = str(args) + str(kwargs)
+            current_time = time.time()
+            
+            if key in cache:
+                result, timestamp = cache[key]
+                if current_time - timestamp < expire_after:
+                    return result
+            
+            result = func(*args, **kwargs)
+            cache[key] = (result, current_time)
+            return result
+        return wrapper
+    return decorator
+
+API_KEY = os.environ.get("ODDS_API_KEY")
 REGIONS = "eu,us,uk,au,za"
 MARKETS = "h2h,totals,btts,corners,cards"
 ODDS_FORMAT = "decimal"
 
+@cached(expire_after=300)
 def get_all_odds():
-    url = "https://api.the-odds-api.com/v4/sports/?all=true"
-    headers = {"Accept": "application/json"}
-    response = requests.get(url, headers=headers)
-    all_data = {}
-    for sport in response.json():
-        if not sport["key"].startswith("soccer_"):
-            continue
-        league = sport["key"]
-        odds_url = f"https://api.the-odds-api.com/v4/sports/{league}/odds/"
-        params = {
-            "apiKey": API_KEY,
-            "regions": REGIONS,
-            "markets": MARKETS,
-            "oddsFormat": ODDS_FORMAT
-        }
-        try:
-            res = requests.get(odds_url, params=params)
-            if res.status_code == 200:
-                all_data[league] = parse_odds_data(res.json())
-        except:
-            continue
-    return all_data
+    try:
+        url = "https://api.the-odds-api.com/v4/sports/?all=true"
+        headers = {"Accept": "application/json"}
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        all_data = {}
+        for sport in response.json():
+            if not sport["key"].startswith("soccer_"):
+                continue
+            
+            try:
+                league = sport["key"]
+                odds_url = f"https://api.the-odds-api.com/v4/sports/{league}/odds/"
+                params = {
+                    "apiKey": API_KEY,
+                    "regions": REGIONS,
+                    "markets": MARKETS,
+                    "oddsFormat": ODDS_FORMAT
+                }
+                
+                res = requests.get(odds_url, params=params, timeout=10)
+                res.raise_for_status()
+                
+                if res.status_code == 200:
+                    all_data[league] = parse_odds_data(res.json())
+            
+            except requests.RequestException as e:
+                print(f"League {league} odds fetch hatası: {e}")
+                continue
+        
+        return all_data
+    
+    except requests.RequestException as e:
+        print(f"Ana API çağrısında hata: {e}")
+        return {}
 
 def parse_odds_data(matches):
     parsed = {}
