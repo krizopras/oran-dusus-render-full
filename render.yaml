@@ -1,14 +1,14 @@
 services:
   - type: web
     name: oran-dusus-render-full
-    env: python
+    env: python3.9  # Spesifik Python sürümü
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python main.py"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        value: 8117066397:AAG1k3L4sMKEz48J2IL8QMzXuiyXDDG1C9Q
+        sync: false
       - key: TELEGRAM_CHAT_ID
-        value: "651951721"
+        sync: false
       - key: DROP_THRESHOLD
         value: "0.10"
