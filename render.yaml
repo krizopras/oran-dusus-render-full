@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: odds-tracker
-    env: python3.9
-    plan: free
+    name: odds-tracker  # Benzersiz isim
+    env: python3.9      # Kesin Python sürümü
+    plan: free          # Ücretsiz plan
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
-    healthCheckPath: /
-    autoDeploy: true
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
@@ -16,3 +14,5 @@ services:
         sync: false
       - key: DROP_THRESHOLD
         value: "0.10"
+    healthCheckPath: /  # Sağlık kontrolü
+    autoDeploy: true    # Otomatik deployment
