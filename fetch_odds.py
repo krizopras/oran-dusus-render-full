@@ -1,93 +1,85 @@
 import os
-import time
-import logging
 import requests
-import functools
+import logging
+from datetime import datetime, timedelta
 
-def cached(expire_after=300):
-    def decorator(func):
-        cache = {}
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = str(args) + str(kwargs)
-            current_time = time.time()
-            
-            if key in cache:
-                result, timestamp = cache[key]
-                if current_time - timestamp < expire_after:
-                    return result
-            
-            result = func(*args, **kwargs)
-            cache[key] = (result, current_time)
-            return result
-        return wrapper
-    return decorator
+# Logging ayarı
+logging.basicConfig(level=logging.INFO)
 
-API_KEY = os.environ.get("ODDS_API_KEY")
-REGIONS = "eu,us,uk,au,za"
-MARKETS = "h2h,totals,btts,corners,cards"
-ODDS_FORMAT = "decimal"
+SPORTMONKS_API_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN")
+BASE_URL = "https://api.sportmonks.com/v3"
 
-@cached(expire_after=300)
-def get_all_odds():
-    if not API_KEY:
-        logging.error("❌ ODDS_API_KEY eksik!")
-        return {}
+def get_sportmonks_odds():
+    if not SPORTMONKS_API_TOKEN:
+        logging.error("❌ Sportmonks API Token eksik!")
+        return []
     
     try:
-        url = "https://api.the-odds-api.com/v4/sports/?all=true"
-        headers = {"Accept": "application/json"}
+        # Güncel ve yaklaşan maçlar için tarih aralığı
+        today = datetime.now()
+        next_week = today + timedelta(days=7)
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        headers = {
+            "Authorization": f"Bearer {SPORTMONKS_API_TOKEN}",
+            "Accept": "application/json"
+        }
         
-        all_data = {}
-        for sport in response.json():
-            if not sport["key"].startswith("soccer_"):
-                continue
-            
-            try:
-                league = sport["key"]
-                odds_url = f"https://api.the-odds-api.com/v4/sports/{league}/odds/"
-                params = {
-                    "apiKey": API_KEY,
-                    "regions": REGIONS,
-                    "markets": MARKETS,
-                    "oddsFormat": ODDS_FORMAT
-                }
-                
-                res = requests.get(odds_url, params=params, timeout=10)
-                res.raise_for_status()
-                
-                if res.status_code == 200:
-                    all_data[league] = parse_odds_data(res.json())
-            
-            except requests.RequestException as e:
-                logging.error(f"League {league} odds fetch hatası: {e}")
-                continue
+        # Futbol maçları için endpoint
+        url = f"{BASE_URL}/football/fixtures"
         
-        return all_data
+        params = {
+            "filter[date_from]": today.strftime("%Y-%m-%d"),
+            "filter[date_to]": next_week.strftime("%Y-%m-%d"),
+            "include": "odds",
+            "page": 1
+        }
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code != 200:
+            logging.error(f"API Çağrı Hatası: {response.status_code}")
+            return []
+        
+        return parse_odds_data(response.json())
     
     except requests.RequestException as e:
-        logging.error(f"Ana API çağrısında hata: {e}")
-        return {}
+        logging.error(f"API çağrısı hatası: {e}")
+        return []
 
-def parse_odds_data(matches):
-    parsed = {}
-    for m in matches:
-        match_id = m.get("id")
-        markets = m.get("bookmakers", [])
-        market_data = {}
-        for bm in markets:
-            for market in bm.get("markets", []):
-                key = market.get("key")
-                outcomes = market.get("outcomes", [])
-                market_data.setdefault(key, [])
-                for o in outcomes:
-                    market_data[key].append({
-                        "label": o.get("name"),
-                        "old": o.get("price") + 0.2,  # Simüle edilmiş düşüş
-                        "new": o.get("price")
-                    })
-        parsed[match_id] = market_data
-    return parsed
+def parse_odds_data(raw_data):
+    parsed_odds = []
+    
+    try:
+        fixtures = raw_data.get('data', [])
+        
+        for fixture in fixtures:
+            # Maç bilgileri
+            home_team = fixture.get('localTeam', {}).get('name', 'Bilinmeyen Takım')
+            away_team = fixture.get('visitorTeam', {}).get('name', 'Bilinmeyen Takım')
+            
+            # Odds bilgileri
+            odds = fixture.get('odds', [])
+            
+            for odd in odds:
+                market_name = f"{home_team} vs {away_team}"
+                
+                parsed_odds.append({
+                    'market_name': market_name,
+                    'old_odds': odd.get('bookmaker', {}).get('probability', {}).get('home', 0),
+                    'new_odds': odd.get('bookmaker', {}).get('probability', {}).get('away', 0)
+                })
+    
+    except Exception as e:
+        logging.error(f"Veri işleme hatası: {e}")
+    
+    return parsed_odds
+
+# Test için mock veri
+def mock_odds_data():
+    return [
+        {
+            'market_name': 'Sample Match',
+            'old_odds': 2.0,
+            'new_odds': 1.8
+        }
+    ]
