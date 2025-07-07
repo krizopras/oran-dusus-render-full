@@ -3,7 +3,7 @@ import time
 import logging
 import requests
 import threading
-from fetch_odds import get_sportmonks_odds
+from fetch_odds import get_odds_data
 
 # Logging yapılandırması
 logging.basicConfig(
@@ -13,7 +13,6 @@ logging.basicConfig(
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-SPORTMONKS_API_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN")
 DROP_THRESHOLD = float(os.getenv("DROP_THRESHOLD", "0.10"))
 
 def send_telegram_message(message):
@@ -29,9 +28,9 @@ def send_telegram_message(message):
 def process_odds_changes(odds_data):
     for match in odds_data:
         try:
-            market_name = match.get('market_name', 'Bilinmeyen Market')
             old_odds = match.get('old_odds')
             new_odds = match.get('new_odds')
+            market_name = match.get('market_name', 'Bilinmeyen Market')
             
             if old_odds and new_odds and old_odds > 0 and new_odds < old_odds:
                 drop_ratio = (old_odds - new_odds) / old_odds
@@ -50,7 +49,7 @@ def background_worker():
     while True:
         try:
             logging.info("⏳ Oranlar kontrol ediliyor...")
-            odds_data = get_sportmonks_odds()
+            odds_data = get_odds_data()
             
             if odds_data:
                 process_odds_changes(odds_data)
@@ -63,7 +62,7 @@ def background_worker():
 
 def main():
     # Gerekli credential kontrolü
-    if not all([TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SPORTMONKS_API_TOKEN]):
+    if not all([TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
         logging.error("❌ Eksik credentials!")
         return
     
