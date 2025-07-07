@@ -6,7 +6,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
-      - key: SPORTMONKS_API_TOKEN
+      - key: THE_ODDS_API_KEY
         sync: false  # Güvenli token yönetimi
       - key: TELEGRAM_BOT_TOKEN
         sync: false
