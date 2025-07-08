@@ -84,10 +84,10 @@ def background_worker():
             odds_data = get_football_odds()
             if odds_data:
                 process_odds_changes(odds_data)
-            time.sleep(900)  # 15 dk
+            time.sleep(1800)  # 30 dk
         except Exception as e:
             logging.error(f"Background worker hatası: {e}")
-            time.sleep(300)
+            time.sleep(600)
 
 threading.Thread(target=background_worker, daemon=True).start()
 
