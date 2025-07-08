@@ -1,47 +1,55 @@
-import requests
 import os
+import requests
+import logging
 
 API_KEY = os.getenv("ODDS_API_KEY")
-REGIONS = "eu"
-MARKETS = "h2h,totals,spreads"
-ODDS_URL = "https://api.the-odds-api.com/v4/sports"
+
+SOCCER_KEYS = [
+    "soccer_epl", "soccer_germany_bundesliga", "soccer_italy_serie_a",
+    "soccer_spain_la_liga", "soccer_france_ligue_one", "soccer_netherlands_eredivisie",
+    "soccer_turkey_super_league", "soccer_portugal_primeira_liga", "soccer_belgium_first_div",
+    "soccer_spl", "soccer_denmark_superliga", "soccer_norway_eliteserien",
+    "soccer_sweden_allsvenskan", "soccer_switzerland_superleague"
+]
+
+BOOKMAKER_NAME = "bet365"
+
+last_odds_cache = {}
 
 def get_football_odds():
-    try:
-        sports_resp = requests.get(f"{ODDS_URL}?all=true&apiKey={API_KEY}")
-        sports_resp.raise_for_status()
-        sports_data = sports_resp.json()
-        football_keys = [s["key"] for s in sports_data if s["group"] == "Soccer" and s["active"]]
+    matches_to_alert = []
+    headers = {"Accept": "application/json"}
 
-        result = []
-        for sport_key in football_keys:
-            url = f"{ODDS_URL}/{sport_key}/odds/?apiKey={API_KEY}&regions={REGIONS}&markets={MARKETS}&oddsFormat=decimal"
-            try:
-                resp = requests.get(url, timeout=10)
-                if resp.status_code != 200:
-                    continue
-                data = resp.json()
-                for match in data:
-                    match_name = match.get("home_team", "") + " vs " + match.get("away_team", "")
-                    for bookmaker in match.get("bookmakers", []):
-                        for market in bookmaker.get("markets", []):
-                            for outcome in market.get("outcomes", []):
-                                old_price = outcome.get("last_update_price", outcome.get("price"))
-                                new_price = outcome.get("price")
-                                if old_price and new_price and new_price < old_price:
-                                    result.append({
-                                        "match": match_name,
-                                        "market_name": market["key"],
-                                        "label": outcome["name"],
-                                        "old_odds": old_price,
-                                        "new_odds": new_price,
-                                        "site": bookmaker["title"],
-                                        "home_team": match.get("home_team"),
-                                        "away_team": match.get("away_team")
-                                    })
-            except:
-                continue
-        return result
-    except Exception as e:
-        print("Ana API çağrısında hata:", e)
-        return []
+    for sport_key in SOCCER_KEYS:
+        url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h&oddsFormat=decimal"
+
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+
+            for game in data:
+                match_name = f"{game['home_team']} vs {game['away_team']}"
+                for bookmaker in game.get("bookmakers", []):
+                    if bookmaker["key"] != BOOKMAKER_NAME:
+                        continue
+                    for market in bookmaker.get("markets", []):
+                        if market["key"] != "h2h":
+                            continue
+                        for outcome in market.get("outcomes", []):
+                            key = f"{match_name}-{market['key']}-{outcome['name']}"
+                            new_odd = outcome["price"]
+                            old_odd = last_odds_cache.get(key)
+                            if old_odd and new_odd < old_odd:
+                                matches_to_alert.append({
+                                    "match": match_name,
+                                    "bookmaker": bookmaker["title"],
+                                    "market_name": market["key"].upper(),  # "H2H"
+                                    "outcome_name": outcome["name"],  # "Draw" / "Team"
+                                    "old_odds": old_odd,
+                                    "new_odds": new_odd
+                                })
+                            last_odds_cache[key] = new_odd
+        except Exception as e:
+            logging.error(f"Ana API çağrısında hata: {e}")
+    return matches_to_alert
