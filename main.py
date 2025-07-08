@@ -1,4 +1,3 @@
-
 import os
 import time
 import logging
@@ -39,17 +38,41 @@ def process_odds_changes(odds_data):
             old_odds = match.get('old_odds')
             new_odds = match.get('new_odds')
             match_name = match.get('match', 'Bilinmeyen Maç')
-            market_name = match.get('market_name', 'Bilinmeyen Market')
-            label = match.get('label', 'Seçim')
+            market_key = match.get('market_name', 'unknown')
+            label_raw = match.get('label', 'Seçim')
+            bookmaker_name = match.get('site', 'Bilinmeyen Site')
+            home_team = match.get("home_team", "")
+            away_team = match.get("away_team", "")
 
             if old_odds and new_odds and old_odds > 0 and new_odds < old_odds:
                 drop_ratio = (old_odds - new_odds) / old_odds
                 if drop_ratio >= DROP_THRESHOLD:
-                    msg = f"""📉 Futbol Oran Düşüşü!
+                    # Bahis tipi belirleme
+                    if market_key == "h2h":
+                        market_name = "MS"
+                        if label_raw == home_team:
+                            label = "MS 1"
+                        elif label_raw == away_team:
+                            label = "MS 2"
+                        else:
+                            label = "MS 0"
+                    elif market_key == "totals":
+                        market_name = "Alt/Üst"
+                        label = label_raw
+                    elif market_key == "spreads":
+                        market_name = "Handikap"
+                        label = label_raw
+                    else:
+                        market_name = market_key
+                        label = label_raw
+
+                    msg = f"""📉 Oran Düşüşü Tespit Edildi!
+🏢 Site: {bookmaker_name}
 ⚽ Maç: {match_name}
-🏷️ Bahis: {label} ({market_name})
-📊 {old_odds} ➡ {new_odds}
-📉 Düşüş: %{int(drop_ratio*100)}"""
+🎯 Bahis Tipi: {market_name}
+🏷️ Seçenek: {label}
+📊 Oran: {old_odds} ➡ {new_odds}
+📉 Düşüş: %{int(drop_ratio * 100)}"""
                     send_telegram_message(msg)
         except Exception as e:
             logging.error(f"Odds işleme hatası: {e}")
@@ -61,17 +84,14 @@ def background_worker():
             odds_data = get_football_odds()
             if odds_data:
                 process_odds_changes(odds_data)
-            time.sleep(900)
+            time.sleep(900)  # 15 dk
         except Exception as e:
             logging.error(f"Background worker hatası: {e}")
             time.sleep(300)
 
-# Thread başlat
 threading.Thread(target=background_worker, daemon=True).start()
 
-# Web sunucu başlat
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
-
